@@ -1,4 +1,123 @@
-# Main entrypoint of the workflow. 
-# Please follow the best practices: 
-# https://snakemake.readthedocs.io/en/stable/snakefiles/best_practices.html,
-# in particular regarding the standardized folder structure mentioned there. 
+import os
+
+configfile: f"{os.path.dirname(workflow.snakefile)}/../config/default_config.yaml"
+localrules: sketch_all_refs
+
+checkpoint create_batch_MAGs:
+    output:
+        batch_dir=directory("output/batches"),
+    conda:
+        "envs/create_batch.yaml"
+    log:
+        "output/log/create_batch_file.log",
+    threads: 1
+    resources:
+        mem_mb=9000,
+        time_min=30,
+        tmpdir=config['tmp_dir'],
+    script:
+        "scripts/create_batch_file.py"
+
+rule sketch_reference:
+    input:
+        MAG_list = "output/batches/{group}.tsv",
+    output:
+        sketch = "output/reference_sketches/{group}.sketch",
+    conda:
+        "envs/bindash.yaml"
+    log:
+        "output/log/reference/{group}.log",
+    threads: config['threads'],
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=config['time_min'],
+        tmpdir=config['tmp_dir'],
+    params:
+        kmer_len=config['kmer_len']
+    shell:
+        "bindash sketch --nthreads={threads} --kmerlen={params.kmer_len} --listfname={input.MAG_list} --outfname={output.sketch} &> {log}"
+
+def sketch_all_ref(wildcards):
+    batch_folder = checkpoints.create_batch_MAGs.get(**wildcards).output.batch_dir
+    all_groups = glob_wildcards(os.path.join(batch_folder, "{group}.tsv")).group
+    return expand("output/reference_sketches/{group}.sketch", group=all_groups)
+
+rule sketch_all_refs:
+    input:
+        sketch_all_ref,
+    output:
+        done = touch("output/sketching_refs_finished")
+
+checkpoint query_MAGs:
+    output:
+        query_dir = directory("output/query_MAGs"),
+    conda:
+        "envs/create_batch.yaml"
+    log:
+        "output/log/create_batch_file.log",
+    threads: 1
+    resources:
+        mem_mb=9000,
+        time_min=30,
+        tmpdir=config['tmp_dir'],
+    script:
+        "scripts/query_MAGs.py"
+
+rule calculate_distance:
+    input:
+        query_MAG = "output/query_MAGs/{MAG}.tsv",
+    output:
+        result = "output/query_results/{MAG}.tsv",
+    conda:
+        "envs/bindash.yaml"
+    log:
+        "output/log/query_sketches/{MAG}.log",
+    threads: config['threads'],
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=config['time_min'],
+        tmpdir=config['tmp_dir'],
+    params:
+        kmer_len=config['kmer_len']
+    script:
+        "scripts/sketch_query.py"
+
+def sketch_all_query(wildcards):
+    batch_folder = checkpoints.query_MAGs.get(**wildcards).output.query_dir
+    all_MAGs = glob_wildcards(os.path.join(batch_folder, "{MAG}.tsv")).MAG
+    return expand("output/query_results/{MAG}.tsv", MAG=all_MAGs)
+
+rule sketch_all_queries:
+    input:
+        all_input = sketch_all_query,
+    output:
+        distance_df = "output/queries_dist.tsv"
+    conda:
+        "envs/create_batch.yaml"
+    log:
+        "output/log/concat_queries.log",
+    threads: 1,
+    resources:
+        mem_mb=6000,
+        time_min=90,
+        tmpdir=config['tmp_dir'],
+    script:
+        "scripts/concat_queries.py"
+
+rule assign_group:
+    input:
+        distance = rules.sketch_all_queries.output.distance_df,
+    output:
+        full_output = "output/full_output.tsv",
+        short_output = "output/short_output.tsv",
+    conda:
+        "envs/create_batch.yaml",
+    log:
+        "output/log/assign_group.log",
+    threads: 1,
+    resources:
+        mem_mb=config['mem_mb'],
+        time_min=config['time_min'],
+        tmpdir=config['tmp_dir'],
+    script:
+        "scripts/assign_group.py"
