@@ -1,6 +1,6 @@
-MAGS_path_table: /home/users/t/trickovi/scratch/assign-MAGs/resources/paths_by_family.tsv
-query_paths: /home/users/t/trickovi/scratch/assign-MAGs/resources/post_HumGut_genomes_family.tsv
-group_def: /home/users/t/trickovi/scratch/assign-MAGs/resources/subsp_def.tsv
+MAGS_path_table: /home/users/t/trickovi/scratch/assign-MAGs/resources/paths_by_family.tsv # a table containing paths to target MAGs with known groups
+query_paths: /home/users/t/trickovi/scratch/assign-MAGs/resources/post_HumGut_genomes_family.tsv # a table containing paths to query MAGs
+group_def: /home/users/t/trickovi/scratch/assign-MAGs/resources/subsp_def.tsv # a table containg information about target MAGs (from 'MAGs_path_table') and their group.
 
 kmer_len: 51
 
